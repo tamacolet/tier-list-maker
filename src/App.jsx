@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Plus, Image as ImageIcon, Download, Trash2, ArrowUp, ArrowDown, X, RefreshCw, AlertCircle, Palette } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { domToJpeg } from 'modern-screenshot';
 
 const defaultTiers = [
     { id: 't1', label: 'S', color: '#ff7f7f', items: [] },
@@ -216,27 +216,22 @@ export default function App() {
                 return;
             }
             try {
-                // html2canvas でキャプチャ（モバイル対応）
-                const canvas = await html2canvas(element, {
+                // modern-screenshot でキャプチャ（oklch等最新CSS対応・モバイル対応）
+                const dataUrl = await domToJpeg(element, {
                     backgroundColor: boardBg.color,
                     scale: 2,
-                    useCORS: true,
-                    // allowTaint は Canvasのセキュリティエラーを引き起こすため削除
-                    logging: false,
-                    scrollX: 0,
-                    scrollY: -window.scrollY,
-                    windowWidth: element.scrollWidth,
-                    windowHeight: element.scrollHeight,
-                    ignoreElements: (el) => el.tagName === 'BUTTON'
+                    filter: (node) => node.tagName !== 'BUTTON'
                 });
 
-                // Canvas → JPEG Blob
-                const blob = await new Promise((resolve, reject) => {
-                    canvas.toBlob((b) => {
-                        if (b) resolve(b);
-                        else reject(new Error("CanvasのBlob変換に失敗しました（画像が制限されています）"));
-                    }, 'image/jpeg', 0.92);
-                });
+                // dataUrl → JPEG Blob
+                const byteString = atob(dataUrl.split(',')[1]);
+                const mimeString = dataUrl.split(',')[0].split(':')[1].split(';')[0];
+                const ab = new ArrayBuffer(byteString.length);
+                const ia = new Uint8Array(ab);
+                for (let i = 0; i < byteString.length; i++) {
+                    ia[i] = byteString.charCodeAt(i);
+                }
+                const blob = new Blob([ab], { type: mimeString });
 
                 const file = new File([blob], 'my-tier-list.jpg', { type: 'image/jpeg' });
 
