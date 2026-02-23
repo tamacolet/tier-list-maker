@@ -221,7 +221,8 @@ export default function App() {
                     backgroundColor: boardBg.color,
                     scale: 2,
                     useCORS: true,
-                    allowTaint: true,
+                    // allowTaint は Canvasのセキュリティエラーを引き起こすため削除
+                    logging: false,
                     scrollX: 0,
                     scrollY: -window.scrollY,
                     windowWidth: element.scrollWidth,
@@ -230,7 +231,13 @@ export default function App() {
                 });
 
                 // Canvas → JPEG Blob
-                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+                const blob = await new Promise((resolve, reject) => {
+                    canvas.toBlob((b) => {
+                        if (b) resolve(b);
+                        else reject(new Error("CanvasのBlob変換に失敗しました（画像が制限されています）"));
+                    }, 'image/jpeg', 0.92);
+                });
+
                 const file = new File([blob], 'my-tier-list.jpg', { type: 'image/jpeg' });
 
                 if (window.showSaveFilePicker) {
@@ -245,7 +252,14 @@ export default function App() {
                     } catch (pickerErr) {
                         if (pickerErr.name !== 'AbortError') throw pickerErr;
                     }
+                } else if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    // モバイル（iOS/Android）向けのネイティブシェア
+                    await navigator.share({
+                        files: [file],
+                        title: 'Tier表',
+                    });
                 } else {
+                    // PCのフォールバック
                     const blobUrl = URL.createObjectURL(file);
                     const link = document.createElement('a');
                     link.download = 'my-tier-list.jpg';
@@ -257,7 +271,7 @@ export default function App() {
                 }
             } catch (err) {
                 console.error("画像生成エラー:", err);
-                setAlertModal({ isOpen: true, message: "画像の作成に失敗しました。特殊な画像フォーマットが含まれている可能性があります。" });
+                setAlertModal({ isOpen: true, message: `画像の作成に失敗しました(${err.message || String(err)})` });
             } finally {
                 setIsExporting(false);
             }
